@@ -550,7 +550,7 @@ def selective_log_softmax(logits, index) -> torch.Tensor:
         index = index.unsqueeze(-1)
 
     if logits.dtype in [torch.float32, torch.float64]:
-        selected_logits = torch.gather(logits, dim=-1, index=index)
+        selected_logits = torch.gather(logits, dim=-1, index=index) # 根据指定的索引从输入张量中收集元素
         # loop to reduce peak mem consumption
         logsumexp_values = torch.stack([torch.logsumexp(lg, dim=-1) for lg in logits])
         per_token_logps = selected_logits - logsumexp_values.unsqueeze(-1)  # log_softmax(x_i) = x_i - logsumexp(x)
