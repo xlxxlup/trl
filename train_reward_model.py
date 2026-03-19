@@ -19,7 +19,7 @@
 import json
 from datasets import Dataset
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 from trl import RewardTrainer, RewardConfig
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from peft import LoraConfig, get_peft_model
@@ -27,6 +27,15 @@ from peft import LoraConfig, get_peft_model
 
 def load_reward_data(jsonl_path):
     """加载奖励模型训练数据
+
+    数据格式：prompt_messages是消息列表（对话历史），chosen和rejected是单个回复字符串
+
+    处理方式：
+    - prompt: 对话历史（messages格式）
+    - chosen: 仅包含chosen回复的message（messages格式）
+    - rejected: 仅包含rejected回复的message（messages格式）
+
+    注意：trl会自动执行 chosen = prompt + chosen，所以chosen不需要包含prompt
 
     Args:
         jsonl_path: JSONL格式的数据文件路径
@@ -38,10 +47,20 @@ def load_reward_data(jsonl_path):
     with open(jsonl_path, 'r', encoding='utf-8') as f:
         for line in f:
             item = json.loads(line)
+
+            # prompt: 对话历史
+            prompt_messages = item["prompt_messages"]
+
+            # chosen: 仅包含assistant的回复（trl会自动拼接prompt）
+            chosen_messages = [{"role": "assistant", "content": item["chosen"]}]
+
+            # rejected: 仅包含assistant的回复（trl会自动拼接prompt）
+            rejected_messages = [{"role": "assistant", "content": item["rejected"]}]
+
             data.append({
-                "prompt": item["prompt"],
-                "chosen": item["chosen"],
-                "rejected": item["rejected"]
+                "prompt": prompt_messages,
+                "chosen": chosen_messages,
+                "rejected": rejected_messages
             })
     return Dataset.from_list(data)
 
@@ -78,12 +97,8 @@ def main():
         task_type="SEQ_CLS",  # 序列分类任务
     )
 
-    # 应用LoRA到模型
-    model = get_peft_model(model, peft_config)
-    model.print_trainable_parameters()
-
     # 加载数据
-    # train_dataset = load_reward_data("/data2/xiangl/projtct/trl/data/reward_train_data.jsonl")
+    train_dataset = load_reward_data("/data2/xiangl/projtct/reward/dpo_training_data_messages.jsonl")
 
     # 也可以使用HuggingFace Hub上的数据集
     # from datasets import load_dataset
@@ -95,7 +110,7 @@ def main():
         args=RewardConfig(
             output_dir=".output/reward_model_output",
             learning_rate=1e-4,  # 奖励模型通常使用较大的学习率
-            per_device_train_batch_size=8,
+            per_device_train_batch_size=1,
             gradient_accumulation_steps=1,
             num_train_epochs=1,
             logging_steps=10,
@@ -108,11 +123,16 @@ def main():
             report_to=["tensorboard"],
             gradient_checkpointing=True,  # 启用梯度检查点以节省显存
         ),
-        train_dataset=None,  # 在这里传入你的训练数据集
+        train_dataset=train_dataset,  # 在这里传入你的训练数据集
         # eval_dataset=None,  # 可选：验证集
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         peft_config=peft_config,
     )
+
+    # 打印第一条数据以验证格式
+    print("数据集样例:")
+    print(train_dataset[0])
+    print("\nprompt格式:", type(train_dataset[0]["prompt"]))
 
     # 开始训练
     trainer.train()

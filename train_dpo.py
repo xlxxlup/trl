@@ -17,7 +17,7 @@ DPO需要偏好数据格式：
 import json
 from datasets import Dataset
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '2,3'  # 使用两张卡
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'  # 使用两张卡
 import swanlab
 from trl import DPOTrainer, DPOConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -110,7 +110,7 @@ def main():
         args=DPOConfig(
             output_dir=".output/dpo_output",
             learning_rate=1e-5,  # DPO学习率，可以根据实际情况调整
-            per_device_train_batch_size=2,
+            per_device_train_batch_size=1,
             gradient_accumulation_steps=8,
             max_steps=1000,
             logging_steps=2,
